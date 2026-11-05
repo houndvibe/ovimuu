@@ -1,5 +1,7 @@
+import { createDb } from '@ovimuu/db';
 import { createBot } from './bot.ts';
 import { EnvError, loadEnv } from './env.ts';
+import { logger } from './logger.ts';
 
 function main(): void {
   let env;
@@ -13,15 +15,19 @@ function main(): void {
     throw e;
   }
 
-  const bot = createBot(env.BOT_TOKEN);
+  const { db, pool } = createDb(env.DATABASE_URL);
+  const bot = createBot(env.BOT_TOKEN, db);
 
-  const stop = () => void bot.stop();
-  process.once('SIGINT', stop);
-  process.once('SIGTERM', stop);
+  const stop = async () => {
+    await bot.stop();
+    await pool.end();
+  };
+  process.once('SIGINT', () => void stop());
+  process.once('SIGTERM', () => void stop());
 
   // Development: long polling. Production webhook comes in the deploy step.
   void bot.start({
-    onStart: (me) => console.log(`Bot @${me.username} started (long polling)`),
+    onStart: (me) => logger.info(`Bot @${me.username} started (long polling)`),
   });
 }
 
