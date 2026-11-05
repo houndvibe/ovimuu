@@ -23,11 +23,18 @@ Telegram-бот + Telegram Mini App: напоминания о приёме ле
 
 ## Команды
 
-(заполнить по мере появления)
-- `pnpm dev` — бот в long polling + Vite dev server
-- `pnpm db:generate` / `pnpm db:migrate`
-- `pnpm test`
-- `pnpm typecheck` / `pnpm lint`
+Первый запуск: `cp .env.example .env` (заполнить `BOT_TOKEN`, `ADMIN_TELEGRAM_ID`), `pnpm install`, `docker compose up -d`, `pnpm db:migrate`.
+
+- `docker compose up -d` — локальный PostgreSQL 16 (только для разработки)
+- `pnpm dev` — бот в long polling (tsx watch, читает корневой `.env`) + Vite dev server Mini App
+- `pnpm db:generate` — сгенерировать SQL-миграцию из `packages/db/src/schema.ts` в `packages/db/drizzle/`
+- `pnpm db:migrate` — применить миграции к `DATABASE_URL`
+- `pnpm test` / `pnpm test:watch` — vitest по всем пакетам
+- `pnpm typecheck` — `tsc` во всех пакетах
+- `pnpm lint` — ESLint; `pnpm format` — Prettier
+- `pnpm --filter @ovimuu/db studio` — Drizzle Studio
+
+Пакеты подключаются как TS-исходники (`exports → ./src/index.ts`), отдельной сборки нет. TypeScript закреплён на 6.0: typescript-eslint пока не поддерживает 7.x.
 
 ## Ключевые правила продукта (не нарушать)
 
@@ -47,7 +54,7 @@ Telegram-бот + Telegram Mini App: напоминания о приёме ле
   - `ocr(image: Buffer): Promise<string>`
   - `parseMedications(text: string, ctx: UserContext): Promise<ParseResult>`
   - `routeIntent(text: string, meds: ActiveMedSummary[]): Promise<IntentResult>`
-  Ответы модели всегда валидируются zod-схемой. Невалидный ответ → одна повторная попытка → понятное сообщение пользователю.
+    Ответы модели всегда валидируются zod-схемой. Невалидный ответ → одна повторная попытка → понятное сообщение пользователю.
 - Логика доменная (расписание, генерация приёмов, XP) — чистые функции без зависимостей от grammY/Hono, покрыты тестами (vitest). Особенно: генерация приёмов на день, часовые пояса, якоря, повторы.
 - Кнопки и callback'и обрабатываются кодом, без вызова ИИ.
 - Mini App авторизуется через `initData`: проверка HMAC на бэкенде на каждый запрос, `user_id` берётся только из проверенных данных.
