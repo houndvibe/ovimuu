@@ -33,6 +33,7 @@ Telegram-бот + Telegram Mini App: напоминания о приёме ле
 - `pnpm typecheck` — `tsc` во всех пакетах
 - `pnpm lint` — ESLint; `pnpm format` — Prettier
 - `pnpm --filter @ovimuu/db studio` — Drizzle Studio
+- `pnpm --filter @ovimuu/ai eval [parse|intent]` — прогон фикстур через настоящий Yandex Cloud (нужны `YC_*`, стоит денег; не входит в `pnpm test`). Запускать после любой правки промптов или смены модели
 
 Пакеты подключаются как TS-исходники (`exports → ./src/index.ts`), отдельной сборки нет. TypeScript закреплён на 6.0: typescript-eslint пока не поддерживает 7.x.
 
@@ -53,7 +54,7 @@ Telegram-бот + Telegram Mini App: напоминания о приёме ле
   - `transcribe(audio: Buffer, mime: string): Promise<string>`
   - `ocr(image: Buffer): Promise<string>`
   - `parseMedications(text: string, ctx: UserContext): Promise<ParseResult>`
-  - `routeIntent(text: string, meds: ActiveMedSummary[]): Promise<IntentResult>`
+  - `routeIntent(text: string, meds: ActiveMedSummary[], today: string): Promise<IntentResult>` (`today` — локальная дата пользователя, чтобы модель могла превратить «до понедельника» в дату)
     Ответы модели всегда валидируются zod-схемой. Невалидный ответ → одна повторная попытка → понятное сообщение пользователю.
 - Логика доменная (расписание, генерация приёмов, XP) — чистые функции без зависимостей от grammY/Hono, покрыты тестами (vitest). Особенно: генерация приёмов на день, часовые пояса, якоря, повторы.
 - Кнопки и callback'и обрабатываются кодом, без вызова ИИ.
