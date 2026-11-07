@@ -1,4 +1,14 @@
-import { and, type Db, drafts, eq, medications, scheduleSlots, schedules } from '@ovimuu/db';
+import {
+  aiFeedback,
+  and,
+  type Db,
+  drafts,
+  eq,
+  medications,
+  scheduleSlots,
+  schedules,
+  sql,
+} from '@ovimuu/db';
 import type { DraftMed, MedicationRecord, Question } from '../domain/draft.ts';
 
 /** What the bot is waiting for on an open draft. */
@@ -17,6 +27,38 @@ export interface DraftPayload {
   seq: number;
   /** Number of corrections, for /stats. */
   editCount: number;
+  // For the "ИИ ошибся" button only. Kept while the draft is open; stripped from closed
+  // drafts by the hourly job. Photo/OCR text is never stored here.
+  /** User texts / voice transcripts sent to the AI for this draft. */
+  inputs?: string[];
+  /** Last raw parse result from the AI. */
+  modelOutput?: unknown;
+  feedbackSent?: boolean;
+}
+
+/** Keys holding user input / model output; removed once a draft is closed. */
+export const SENSITIVE_PAYLOAD_KEYS = ['inputs', 'modelOutput', 'inputText', 'intentResult'];
+
+/** Hourly: strip user input and model output from drafts that are no longer open. */
+export async function stripClosedDraftInputs(db: Db): Promise<void> {
+  await db.execute(sql`
+    update drafts
+    set payload = payload - ${SENSITIVE_PAYLOAD_KEYS[0]} - ${SENSITIVE_PAYLOAD_KEYS[1]}
+                          - ${SENSITIVE_PAYLOAD_KEYS[2]} - ${SENSITIVE_PAYLOAD_KEYS[3]}
+    where status <> 'open'
+      and (payload ?| array['inputs', 'modelOutput', 'inputText', 'intentResult'])
+  `);
+}
+
+/** "ИИ ошибся": explicit user action, the only case where raw input is stored. */
+export async function saveAiFeedback(
+  db: Db,
+  userId: number,
+  kind: 'parse' | 'intent',
+  inputText: string | null,
+  modelOutput: unknown,
+): Promise<void> {
+  await db.insert(aiFeedback).values({ userId, kind, inputText, modelOutput: modelOutput ?? null });
 }
 
 export interface Draft {

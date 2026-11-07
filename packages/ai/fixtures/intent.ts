@@ -10,6 +10,7 @@ export const intentMeds: ActiveMedSummary[] = [
   { id: 11, name: 'Магний', schedule: 'каждый день после завтрака, 1 таблетка' },
   { id: 12, name: 'Витамин D3', schedule: 'каждый день утром, 1 капсула' },
   { id: 13, name: 'Омега-3', schedule: 'каждый день после ужина, 1 капсула' },
+  { id: 14, name: 'Железо', schedule: 'через день перед сном, 1 таблетка (на паузе)' },
 ];
 
 export const intentToday = '2026-11-07';
@@ -51,6 +52,21 @@ export const intentFixtures: IntentFixture[] = [
     expected: { intent: 'pause', targets: [13], params: { pauseDays: 7 } },
   },
   {
+    id: 'pause-until-weekday',
+    input: 'поставь витамин д на паузу до понедельника',
+    expected: {
+      intent: 'pause',
+      targets: [12],
+      params: { pauseUntilWeekday: 1, pauseUntil: null },
+    },
+  },
+  { id: 'resume', input: 'возобнови железо', expected: { intent: 'resume', targets: [14] } },
+  {
+    id: 'mark-taken-several',
+    input: 'выпила магний и омегу',
+    expected: { intent: 'mark_taken', targets: [11, 13] },
+  },
+  {
     id: 'complete',
     input: 'я закончила курс магния',
     expected: { intent: 'complete', targets: [11] },
@@ -63,4 +79,9 @@ export const intentFixtures: IntentFixture[] = [
     expected: { intent: 'other', otherKind: 'medical' },
   },
   { id: 'chat', input: 'спасибо, Ови!', expected: { intent: 'other', otherKind: 'chat' } },
+  {
+    id: 'pause-until-date',
+    input: 'пауза для магния до 15 ноября',
+    expected: { intent: 'pause', targets: [11], params: { pauseUntil: '2026-11-15' } },
+  },
 ];

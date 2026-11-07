@@ -60,4 +60,6 @@ export const cardKeyboard = (draftId: number, seq: number) =>
     .text(t.confirmButton, data(draftId, seq, 'ok'))
     .row()
     .text(t.editButton, data(draftId, seq, 'edit'))
-    .text(t.cancelButton, data(draftId, seq, 'cancel'));
+    .text(t.cancelButton, data(draftId, seq, 'cancel'))
+    .row()
+    .text(texts.feedback.button, data(draftId, seq, 'fb'));

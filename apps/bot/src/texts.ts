@@ -5,6 +5,7 @@ import { formatTime, parseTime, shiftTime } from './domain/anchors.ts';
 import { formatDateRu } from './domain/dates.ts';
 import { type DraftMed, type MealPreset, scheduleDates } from './domain/draft.ts';
 import { formatDays, formatNumber, formatUnits, pluralRu } from './domain/plural.ts';
+import type { QuestKind } from './domain/reminders.ts';
 
 const anchorNames: Record<AnchorKey, string> = {
   wake: 'Подъём',
@@ -152,13 +153,147 @@ export const texts = {
     editButton: 'Исправить',
     cancelButton: 'Отмена',
     askCorrection: 'Напиши, что поменять — например: «магний не после завтрака, а после ужина» 🙂',
-    saved: 'Сохранил ✅ Напоминания подключу совсем скоро — я над этим работаю 🌱',
+    saved:
+      'Сохранил ✅ Напомню, когда придёт время. Поменять что-то можно просто фразой — например: «магний теперь после ужина» 🌿',
     cardSaved: '✅ Сохранено',
     cancelled: 'Хорошо, ничего не сохраняю 🌿',
     cardCancelled: '✖️ Отменено',
     staleButton: 'Это уже неактуально 🙂',
   },
+
+  reminders: {
+    title: {
+      morning: '☀️ Утренний квест',
+      day: '🌤 Дневной квест',
+      evening: '🌆 Вечерний квест',
+      night: '🌙 Ночной квест',
+    } satisfies Record<QuestKind, string>,
+    item: (
+      mark: 'open' | 'taken' | 'skipped',
+      m: {
+        name: string;
+        doseAmount: number | null;
+        doseUnit: string | null;
+        unitsPerIntake: number;
+        unitForm: string | null;
+      },
+    ) => {
+      const icon = mark === 'taken' ? '✅' : mark === 'skipped' ? '⏭' : '•';
+      const dose =
+        m.doseAmount !== null
+          ? ` ${formatNumber(m.doseAmount)}${m.doseUnit ? ` ${m.doseUnit}` : ''}`
+          : '';
+      return `${icon} ${m.name}${dose} — ${formatUnits(m.unitsPerIntake, m.unitForm)}`;
+    },
+    takenAt: (time: string) => `✅ Принято в ${time}`,
+    skipped: 'Пропущено — ничего страшного 🌿',
+    mixedDone: 'Готово 🌿',
+    snoozedUntil: (time: string) => `⏰ Напомню в ${time}`,
+    repeat: 'Ови напоминает 🌿',
+    takeAllButton: (multi: boolean) => (multi ? '✅ Всё принято' : '✅ Принято'),
+    laterButton: '⏰ Позже',
+    skipButton: 'Пропустить',
+    eachButton: 'Отметить по отдельности',
+    snoozeButton: (min: number) => (min === 60 ? '1 час' : `${min} мин`),
+    backButton: '← Назад',
+    takeOneButton: (name: string) => `✅ ${name}`,
+    skipOneButton: '⏭',
+    undoButton: 'Отменить',
+    alreadyDone: 'Уже отмечено 🙂',
+    undone: 'Отменил 🙂',
+    withXp: (line: string, xp: number) => (xp > 0 ? `${line} · +${xp} XP` : line),
+  },
+
+  progress: {
+    dayBonus: (xp: number) => `🌟 Все приёмы за день отмечены — +${xp} XP. Ови сияет!`,
+    levelUp: (level: number, reward: string | null) =>
+      reward
+        ? `🎉 Уровень ${level}! Ови получил новый аксессуар — скоро покажу его в приложении 🎁`
+        : `🎉 Уровень ${level}! Ови гордится тобой 🌿`,
+  },
+
+  change: {
+    /** One line per active medication for the intent router (model input, not shown). */
+    medSummary: (m: DraftMed, a: Anchors, paused: boolean) =>
+      `${scheduleLine(m, a)}, ${formatUnits(m.unitsPerIntake ?? 0, m.unitForm)}${paused ? ' (на паузе)' : ''}`,
+    chat: 'Я рядом 🌿 Если что-то начнёшь принимать — расскажи, а я напомню.',
+    medical: 'Советов по лечению я не даю — лучше спроси врача или фармацевта 🌿',
+    noMeds: 'Пока у тебя нет препаратов. Расскажи, что принимаешь — голосом, фото или текстом 🌿',
+    askWhichMed: 'Какой препарат?',
+    askTime: (name: string) => `${name}: когда принимать теперь?`,
+    askUnits: (name: string) => `${name}: сколько за один приём теперь?`,
+    askPause: (name: string) => `${name}: на сколько поставить на паузу?`,
+    pauseButtons: { days3: '3 дня', week: 'Неделя', indefinite: 'Пока не скажу' },
+    previewTime: (name: string, before: DraftMed, after: DraftMed, a: Anchors) =>
+      `${name}\nбыло: ${scheduleLine(before, a)}\nстанет: ${scheduleLine(after, a)}`,
+    previewUnits: (name: string, before: DraftMed, after: DraftMed) =>
+      `${name}\nбыло: ${formatUnits(before.unitsPerIntake ?? 0, before.unitForm)} за приём\nстанет: ${formatUnits(after.unitsPerIntake ?? 0, after.unitForm)} за приём`,
+    previewPause: (name: string, until: string | null, today: string) =>
+      until
+        ? `Поставить ${name} на паузу? Снова начну напоминать с ${formatDateRu(until, today)}.`
+        : `Поставить ${name} на паузу? Не буду напоминать, пока не попросишь — например: «возобнови ${name}».`,
+    previewResume: (name: string) => `Возобновить ${name}? Напоминания снова начнутся.`,
+    previewComplete: (name: string) =>
+      `Завершить курс: ${name}? Напоминания прекратятся, история останется.`,
+    previewDelete: (name: string) =>
+      `Удалить ${name}? Напоминания прекратятся. Уже отмеченные приёмы и XP останутся.`,
+    notPaused: (name: string) => `${name} и так не на паузе 🙂`,
+    confirmButton: 'Подтвердить',
+    cancelButton: 'Отмена',
+    applied: '✅ Готово',
+    cancelled: '✖️ Отменено',
+    stale: 'Это уже неактуально 🙂',
+    markedTaken: (names: string[], xp: number) =>
+      `✅ Отметил: ${names.join(', ')}${xp > 0 ? ` · +${xp} XP` : ''}`,
+    markUndoButton: 'Отменить',
+    markUndone: 'Отменил отметку 🙂',
+    markUndoExpired: 'Отменить уже нельзя — прошло больше 10 минут',
+  },
+
+  feedback: {
+    button: 'ИИ ошибся 🙈',
+    thanks: 'Спасибо! Учту 🙈',
+  },
+
+  account: {
+    deleteConfirm:
+      'Удалить всё? Препараты, расписание, история приёмов и прогресс Ови будут стёрты безвозвратно.',
+    deleteButton: 'Удалить всё',
+    cancelButton: 'Отмена',
+    deleted: '🗑 Всё удалено 🌿 Если захочешь начать заново — /start',
+    deleteCancelled: '✖️ Отменено, ничего не удалил',
+    deleteExpired: 'Кнопка устарела — пришли /delete ещё раз, если всё ещё хочешь удалить данные.',
+    stats: (w: StatsView, a: StatsView) => {
+      const pct = (part: number, total: number) =>
+        total > 0 ? ` (${Math.round((part / total) * 100)}%)` : '';
+      const median =
+        w.medianResponseMin !== null
+          ? ` · медиана ответа ${Math.round(w.medianResponseMin)} мин`
+          : '';
+      const edits = a.avgDraftEdits !== null ? a.avgDraftEdits.toFixed(1).replace('.', ',') : '—';
+      return [
+        '📊 7 дней / всё время',
+        `Пользователей: ${a.users} (активных за 7 дней: ${w.activeUsers})`,
+        `Напоминаний отправлено: ${w.remindersSent} / ${a.remindersSent}`,
+        `Отвечено: ${w.remindersAnswered}${pct(w.remindersAnswered, w.remindersSent)}${median}`,
+        `Без отметки (not_marked): ${w.notMarked} / ${a.notMarked}`,
+        `Правок черновика в среднем: ${edits}`,
+        `«ИИ ошибся»: ${w.aiFeedback} / ${a.aiFeedback}`,
+      ].join('\n');
+    },
+  },
 } as const;
+
+interface StatsView {
+  users: number;
+  activeUsers: number;
+  remindersSent: number;
+  remindersAnswered: number;
+  medianResponseMin: number | null;
+  notMarked: number;
+  avgDraftEdits: number | null;
+  aiFeedback: number;
+}
 
 // ---------- Formatting helpers for medication cards ----------
 
@@ -221,6 +356,12 @@ function describeFrequency(m: DraftMed): string {
     default:
       return '?';
   }
+}
+
+/** "каждый день · завтрак (9:00), в 21:00" */
+function scheduleLine(m: DraftMed, a: Anchors): string {
+  const when = m.slots.map((s) => describeSlot(s, a)).join(', ');
+  return `${describeFrequency(m)}${when ? ` · ${when}` : ''}`;
 }
 
 function medCard(m: DraftMed, a: Anchors, today: string): string {

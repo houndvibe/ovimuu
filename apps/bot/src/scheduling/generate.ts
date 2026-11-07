@@ -1,6 +1,8 @@
 import type { Db } from '@ovimuu/db';
 import { addDays, localDate } from '../domain/dates.ts';
 import { planIntakes } from '../domain/intakes.ts';
+import { startOfLocalDay } from '../domain/reminders.ts';
+import { markNotMarked } from '../repo/reminders.ts';
 import { logger } from '../logger.ts';
 import {
   deleteFuturePending,
@@ -19,6 +21,9 @@ export async function generateForUser(db: Db, userId: number, now = new Date()):
   const settings = await getSettings(db, userId);
   const today = localDate(now, settings.timezone);
   await updateScheduleStatuses(db, userId, today);
+  // End of day: unanswered intakes from previous local days become not_marked.
+  const notMarked = await markNotMarked(db, userId, startOfLocalDay(now, settings.timezone));
+  if (notMarked > 0) logger.info({ userId, count: notMarked }, 'intakes not marked');
 
   const planned = planIntakes({
     schedules: await loadSchedules(db, userId),

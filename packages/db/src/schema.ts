@@ -17,7 +17,6 @@ import {
   timestamp,
   unique,
   uniqueIndex,
-  uuid,
 } from 'drizzle-orm/pg-core';
 
 // ---------- Enums ----------
@@ -98,6 +97,8 @@ export const medications = pgTable(
     /** tablet, capsule, drops, ... */
     unitForm: text('unit_form'),
     notes: text('notes'),
+    /** Soft delete ("удали магний"): hidden everywhere, history and XP are kept. */
+    deletedAt: timestamp('deleted_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [index('medications_user_id_idx').on(t.userId)],
@@ -164,20 +165,45 @@ export const intakes = pgTable(
       .references(() => medications.id, { onDelete: 'cascade' }),
     /** Null for ad-hoc "taken now" intakes (these never earn XP). */
     scheduleId: integer('schedule_id').references(() => schedules.id, { onDelete: 'cascade' }),
-    slotId: integer('slot_id').references(() => scheduleSlots.id, { onDelete: 'cascade' }),
+    // SET NULL: replacing slots on a time change must not erase intake history.
+    slotId: integer('slot_id').references(() => scheduleSlots.id, { onDelete: 'set null' }),
     scheduledAt: timestamp('scheduled_at', { withTimezone: true }).notNull(),
     status: intakeStatus('status').notNull().default('pending'),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
-    reminderMessageId: integer('reminder_message_id'),
-    /** Shared by intakes sent together in one reminder message. */
-    reminderGroupId: uuid('reminder_group_id'),
+    /** The reminder message this intake was sent in (shared by intakes due at the same time). */
+    reminderId: integer('reminder_id').references(() => reminders.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
   },
   (t) => [
     // Makes intake generation idempotent. NULL slot_id (ad-hoc intakes) is never deduplicated.
     unique('intakes_slot_scheduled_at_uq').on(t.slotId, t.scheduledAt),
     index('intakes_user_scheduled_at_idx').on(t.userId, t.scheduledAt),
-    index('intakes_reminder_group_id_idx').on(t.reminderGroupId),
+    index('intakes_reminder_id_idx').on(t.reminderId),
+  ],
+);
+
+/** One reminder message in the chat, grouping intakes due at the same time. */
+export const reminders = pgTable(
+  'reminders',
+  {
+    id: id(),
+    userId: userRef(),
+    scheduledAt: timestamp('scheduled_at', { withTimezone: true }).notNull(),
+    /** Telegram message id of the current reminder message (changes after a snooze resend). */
+    messageId: integer('message_id'),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    repeatsSent: smallint('repeats_sent').notNull().default(0),
+    /** When to send the next "Ови напоминает" reply; null = no more repeats. */
+    repeatAt: timestamp('repeat_at', { withTimezone: true }),
+    /** "Позже": when to resend the reminder. */
+    snoozedUntil: timestamp('snoozed_until', { withTimezone: true }),
+    /** All intakes answered (or sending failed); no more repeats or resends. */
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index('reminders_repeat_at_idx').on(t.repeatAt),
+    index('reminders_snoozed_until_idx').on(t.snoozedUntil),
   ],
 );
 
@@ -230,10 +256,23 @@ export const userProgress = pgTable('user_progress', {
     .primaryKey()
     .references(() => users.id, { onDelete: 'cascade' }),
   xpTotal: integer('xp_total').notNull().default(0),
+  /** Current level, always recomputed from xp_total (may drop after an undo). */
   level: integer('level').notNull().default(1),
-  /** Cumulative counter, never decreases. */
+  /** Highest level ever reached: level-up congratulations are sent only above it. */
+  bestLevel: integer('best_level').notNull().default(1),
+  /** Cumulative counter of active_days, never decreases. */
   daysWithOvi: integer('days_with_ovi').notNull().default(0),
 });
+
+/** Local dates on which the user marked at least one intake. Rows are never deleted. */
+export const activeDays = pgTable(
+  'active_days',
+  {
+    userId: userRef(),
+    date: date('date').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.date] })],
+);
 
 export const unlocks = pgTable(
   'unlocks',

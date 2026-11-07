@@ -55,6 +55,7 @@ export const intentSchema = z.enum([
   'change_time',
   'change_amount',
   'pause',
+  'resume',
   'complete',
   'delete',
   'mark_taken',
@@ -68,7 +69,10 @@ export const intentResultSchema = z.object({
   params: z.object({
     slots: z.array(slotSchema).nullable(),
     unitsPerIntake: z.number().nullable(),
+    /** Explicit calendar date only ("до 15 ноября"). */
     pauseUntil: isoDate.nullable(),
+    /** "до понедельника" → 1. The date is computed by code. */
+    pauseUntilWeekday: z.number().int().min(1).max(7).nullable(),
     pauseDays: z.number().int().nullable(),
   }),
   otherKind: z.enum(['chat', 'medical']).nullable(),

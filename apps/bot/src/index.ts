@@ -26,8 +26,8 @@ async function main(): Promise<void> {
       ...(env.YC_MODEL_INTENT && { intent: env.YC_MODEL_INTENT }),
     },
   });
-  const bot = createBot(env.BOT_TOKEN, { db, ai });
-  const boss = await startScheduler(env.DATABASE_URL, db);
+  const bot = createBot(env.BOT_TOKEN, { db, ai, adminTelegramId: env.ADMIN_TELEGRAM_ID });
+  const boss = await startScheduler(env.DATABASE_URL, db, bot.api);
 
   const stop = async () => {
     await bot.stop();

@@ -81,7 +81,7 @@ export async function deleteFuturePending(db: Db, userId: number, now: Date): Pr
         eq(intakes.userId, userId),
         eq(intakes.status, 'pending'),
         gt(intakes.scheduledAt, now),
-        isNull(intakes.reminderMessageId),
+        isNull(intakes.reminderId),
         isNotNull(intakes.scheduleId),
       ),
     )

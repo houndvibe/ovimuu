@@ -1,8 +1,7 @@
-import { AiError, MAX_VOICE_DURATION_SEC, type ParseResult } from '@ovimuu/ai';
+import type { ParseResult } from '@ovimuu/ai';
 import { Composer } from 'grammy';
 import type { BotContext } from '../context.ts';
-import { ANCHOR_KEYS, type Anchors, isAnchorKey } from '../domain/anchors.ts';
-import { localDate } from '../domain/dates.ts';
+import { ANCHOR_KEYS, isAnchorKey } from '../domain/anchors.ts';
 import {
   anchorSlot,
   applyFrequency,
@@ -20,6 +19,7 @@ import {
   toggleWeekday,
 } from '../domain/draft.ts';
 import { parseAmount, parseClockTime } from '../domain/parse-input.ts';
+import { type Source, type UserClock, userClock, withAi } from '../flow.ts';
 import { logger } from '../logger.ts';
 import {
   closeDraft,
@@ -27,9 +27,9 @@ import {
   createDraft,
   type Draft,
   getOpenDraft,
+  saveAiFeedback,
   saveDraft,
 } from '../repo/drafts.ts';
-import { getSettings, settingsToAnchors } from '../repo/users.ts';
 import { regenerateForUser } from '../scheduling/generate.ts';
 import { downloadFile } from '../telegram-files.ts';
 import { texts } from '../texts.ts';
@@ -37,35 +37,6 @@ import { markChosen } from '../ui.ts';
 import { cardKeyboard, draftCallbackPattern, questionKeyboard } from './keyboards.ts';
 
 const t = texts.add;
-type Source = 'text' | 'voice' | 'photo';
-
-interface UserClock {
-  anchors: Anchors;
-  today: string;
-}
-
-async function userClock(ctx: BotContext): Promise<UserClock> {
-  const settings = await getSettings(ctx.db, ctx.user.id);
-  return { anchors: settingsToAnchors(settings), today: localDate(new Date(), settings.timezone) };
-}
-
-/** Runs an AI/download step with a typing indicator; on failure replies and returns null. */
-async function withAi<T>(ctx: BotContext, source: Source, fn: () => Promise<T>): Promise<T | null> {
-  await ctx.replyWithChatAction('typing').catch(() => undefined);
-  try {
-    return await fn();
-  } catch (err) {
-    if (err instanceof AiError) {
-      logger.warn({ userId: ctx.user.id, code: err.code, status: err.status }, 'ai error');
-      await ctx.reply(t.aiError(err.code, source));
-    } else {
-      logger.error({ userId: ctx.user.id, err }, 'ai step failed');
-      await ctx.reply(t.aiError('unavailable', source));
-    }
-    return null;
-  }
-}
-
 // ---------- Prompts ----------
 
 const medName = (m: DraftMed | undefined) => m?.name ?? 'Препарат';
@@ -129,10 +100,13 @@ async function startOrExtend(
   result: ParseResult,
   clock: UserClock,
   append: boolean,
+  /** User text / transcript (null for photos: OCR text is never stored). */
+  input: string | null,
 ) {
   const existing = append ? await getOpenDraft(ctx.db, ctx.user.id) : null;
   if (existing) {
     existing.payload.meds = [...existing.payload.meds, ...result.medications];
+    existing.payload.modelOutput = result;
     await advance(ctx, existing, clock);
     return;
   }
@@ -141,6 +115,8 @@ async function startOrExtend(
     awaiting: null,
     seq: 0,
     editCount: 0,
+    inputs: input ? [input] : [],
+    modelOutput: result,
   });
   logger.info(
     { userId: ctx.user.id, draftId: draft.id, meds: result.medications.length },
@@ -189,74 +165,80 @@ async function tryTypedAnswer(
   return false;
 }
 
-async function handleText(ctx: BotContext, text: string, source: Source): Promise<void> {
-  const clock = await userClock(ctx);
-  const draft = await getOpenDraft(ctx.db, ctx.user.id);
+/** Text while an add-draft is open: a typed answer, otherwise a correction via AI. */
+export async function continueAddDraft(
+  ctx: BotContext,
+  draft: Draft,
+  text: string,
+  source: Source,
+  clock: UserClock,
+): Promise<void> {
+  if (await tryTypedAnswer(ctx, draft, text, clock)) return;
+  const result = await withAi(ctx, source, () =>
+    ctx.ai.parseMedications(text, {
+      today: clock.today,
+      currentDraft: { medications: draft.payload.meds },
+    }),
+  );
+  if (!result) return;
+  draft.payload.meds = result.medications;
+  draft.payload.editCount += 1;
+  draft.payload.inputs = [...(draft.payload.inputs ?? []), text];
+  draft.payload.modelOutput = result;
+  logger.info({ userId: ctx.user.id, draftId: draft.id }, 'draft corrected');
+  await advance(ctx, draft, clock);
+}
 
-  if (draft) {
-    if (await tryTypedAnswer(ctx, draft, text, clock)) return;
-    // Anything else while a draft is open is a correction to it.
-    const result = await withAi(ctx, source, () =>
-      ctx.ai.parseMedications(text, {
-        today: clock.today,
-        currentDraft: { medications: draft.payload.meds },
-      }),
-    );
-    if (!result) return;
-    draft.payload.meds = result.medications;
-    draft.payload.editCount += 1;
-    logger.info({ userId: ctx.user.id, draftId: draft.id }, 'draft corrected');
-    await advance(ctx, draft, clock);
-    return;
-  }
-
+/** New medications from free text (intent "add" or no router). */
+export async function startAddFromText(
+  ctx: BotContext,
+  text: string,
+  source: Source,
+  clock: UserClock,
+): Promise<void> {
   const result = await withAi(ctx, source, () =>
     ctx.ai.parseMedications(text, { today: clock.today }),
   );
-  if (result) await startOrExtend(ctx, result, clock, false);
+  if (result) await startOrExtend(ctx, result, clock, false, text);
 }
 
-export const addFlow = new Composer<BotContext>();
-
-addFlow.on('message:text', async (ctx) => {
-  if (ctx.message.text.startsWith('/')) {
-    await ctx.reply(t.unsupportedInput);
-    return;
-  }
-  await handleText(ctx, ctx.message.text, 'text');
-});
-
-addFlow.on('message:voice', async (ctx) => {
-  const voice = ctx.message.voice;
-  if (voice.duration > MAX_VOICE_DURATION_SEC) {
-    await ctx.reply(t.aiError('audio_too_long', 'voice'));
-    return;
-  }
-  const text = await withAi(ctx, 'voice', async () =>
-    ctx.ai.transcribe(await downloadFile(ctx, voice.file_id), voice.mime_type ?? 'audio/ogg'),
-  );
-  if (text) await handleText(ctx, text, 'voice');
-});
-
-addFlow.on('message:photo', async (ctx) => {
-  const photo = ctx.message.photo.at(-1)!; // largest size
+/** Photo of a prescription; while a draft is open the found medications are appended. */
+export async function addFromPhoto(ctx: BotContext, fileId: string): Promise<void> {
   const clock = await userClock(ctx);
   // The image and OCR text live only in memory here and are never stored.
   const result = await withAi(ctx, 'photo', async () => {
-    const ocrText = await ctx.ai.ocr(await downloadFile(ctx, photo.file_id));
+    const ocrText = await ctx.ai.ocr(await downloadFile(ctx, fileId));
     return ctx.ai.parseMedications(ocrText, { today: clock.today });
   });
-  // A photo while a draft is open adds to it (e.g. a prescription on two pages).
-  if (result) await startOrExtend(ctx, result, clock, true);
-});
+  if (result) await startOrExtend(ctx, result, clock, true, null);
+}
 
-addFlow.on('message', (ctx) => ctx.reply(t.unsupportedInput));
+export const addFlow = new Composer<BotContext>();
 
 // ---------- Buttons ----------
 
 addFlow.callbackQuery(draftCallbackPattern, async (ctx) => {
   const [, draftId, seq, action] = ctx.match;
   const draft = await getOpenDraft(ctx.db, ctx.user.id);
+
+  // "ИИ ошибся" works on any card of the open draft, even an older one.
+  if (action === 'fb' && draft && draft.id === Number(draftId)) {
+    if (!draft.payload.feedbackSent) {
+      await saveAiFeedback(
+        ctx.db,
+        ctx.user.id,
+        'parse',
+        draft.payload.inputs?.join('\n---\n') || null,
+        draft.payload.modelOutput,
+      );
+      draft.payload.feedbackSent = true;
+      await saveDraft(ctx.db, draft);
+      logger.info({ userId: ctx.user.id, draftId: draft.id }, 'ai feedback saved');
+    }
+    await ctx.answerCallbackQuery(texts.feedback.thanks);
+    return;
+  }
+
   if (!draft || draft.id !== Number(draftId) || draft.payload.seq !== Number(seq) || !action) {
     await ctx.answerCallbackQuery(t.staleButton);
     return;

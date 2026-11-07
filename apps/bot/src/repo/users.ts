@@ -6,6 +6,20 @@ export type UserSettings = typeof userSettings.$inferSelect;
 type UserPatch = Partial<Omit<typeof users.$inferInsert, 'id' | 'telegramId'>>;
 type SettingsPatch = Partial<Omit<typeof userSettings.$inferInsert, 'userId'>>;
 
+/** Telegram chat id + settings, for jobs that message a user outside of an update. */
+export async function getUserForMessaging(
+  db: Db,
+  userId: number,
+): Promise<{ telegramId: number; settings: UserSettings }> {
+  const [row] = await db
+    .select({ telegramId: users.telegramId, settings: userSettings })
+    .from(users)
+    .innerJoin(userSettings, eq(userSettings.userId, users.id))
+    .where(eq(users.id, userId));
+  if (!row) throw new Error(`User ${userId} not found`);
+  return row;
+}
+
 /** Finds the user by Telegram id or creates them (with settings and progress rows). */
 export async function getOrCreateUser(
   db: Db,

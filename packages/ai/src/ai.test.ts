@@ -14,7 +14,13 @@ const validIntent = (targets: number[]) =>
   JSON.stringify({
     intent: 'mark_taken',
     targets,
-    params: { slots: null, unitsPerIntake: null, pauseUntil: null, pauseDays: null },
+    params: {
+      slots: null,
+      unitsPerIntake: null,
+      pauseUntil: null,
+      pauseUntilWeekday: null,
+      pauseDays: null,
+    },
     otherKind: null,
   });
 

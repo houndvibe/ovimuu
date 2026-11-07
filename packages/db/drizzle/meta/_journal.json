@@ -8,6 +8,34 @@
       "when": 1793873113588,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794046427272,
+      "tag": "0001_reminders",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794046429082,
+      "tag": "0002_intake_reminder_id",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794047148700,
+      "tag": "0003_progress",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794047577348,
+      "tag": "0004_soft_delete_slot_history",
+      "breakpoints": true
     }
   ]
 }

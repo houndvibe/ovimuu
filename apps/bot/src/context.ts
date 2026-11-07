@@ -6,6 +6,8 @@ import { getOrCreateUser, type User } from './repo/users.ts';
 export interface Deps {
   db: Db;
   ai: AiService;
+  /** Telegram id allowed to use /stats. */
+  adminTelegramId: number;
 }
 
 export type BotContext = Context &
@@ -23,6 +25,7 @@ export function userMiddleware(deps: Deps): MiddlewareFn<BotContext> {
   return async (ctx, next) => {
     ctx.db = deps.db;
     ctx.ai = deps.ai;
+    ctx.adminTelegramId = deps.adminTelegramId;
     ctx.user = await getOrCreateUser(deps.db, ctx.from!.id, ctx.from!.first_name ?? null);
     await next();
   };
