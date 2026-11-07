@@ -18,13 +18,17 @@ const cleanString = (value: string | null): string | null => {
   return trimmed === '' || trimmed.toLowerCase() === 'null' ? null : trimmed;
 };
 
+/** "мелатонин" → "Мелатонин"; keeps the rest as written ("L-тироксин", "Магне B6"). */
+const capitalize = (value: string | null): string | null =>
+  value ? value.charAt(0).toLocaleUpperCase('ru') + value.slice(1) : value;
+
 export function normalizeParseResult(result: ParseResult): ParseResult {
   return {
     medications: result.medications.map((m) => {
       const slots = normalizeSlots(m.slots);
       return {
         ...m,
-        name: cleanString(m.name),
+        name: capitalize(cleanString(m.name)),
         doseUnit: cleanString(m.doseUnit),
         unitForm: cleanString(m.unitForm),
         notes: cleanString(m.notes),

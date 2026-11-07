@@ -13,7 +13,7 @@ Telegram-бот + Telegram Mini App: напоминания о приёме ле
 ## Стек
 
 - TypeScript везде, Node.js 22 LTS, pnpm workspaces.
-- `apps/bot` — бот + HTTP API для Mini App в **одном процессе**: grammY (+ `@grammyjs/conversations`, `@grammyjs/menu`), Hono для API.
+- `apps/bot` — бот + HTTP API для Mini App в **одном процессе**: grammY, Hono для API. Состояние диалогов (онбординг, черновики) хранится в БД (`users.onboarding_step`, `drafts.payload`), без плагина conversations — переживает рестарт.
 - `apps/miniapp` — React + Vite + `@telegram-apps/sdk-react`.
 - `packages/db` — PostgreSQL 16 + Drizzle ORM + drizzle-kit миграции.
 - `packages/ai` — интеграции Yandex Cloud: SpeechKit (STT), Vision OCR, YandexGPT. Наружу только интерфейс (см. ниже).

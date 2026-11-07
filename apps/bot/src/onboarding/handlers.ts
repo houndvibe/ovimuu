@@ -13,6 +13,7 @@ import {
   type User,
 } from '../repo/users.ts';
 import { texts } from '../texts.ts';
+import { markChosen } from '../ui.ts';
 import {
   anchorShiftPattern,
   anchorsEditorKeyboard,
@@ -33,17 +34,6 @@ const greetImagePath = fileURLToPath(new URL('../../assets/ovi/greet.png', impor
 async function setStep(ctx: BotContext, step: OnboardingStep | null, extra: Partial<User> = {}) {
   ctx.user = await updateUser(ctx.db, ctx.user.id, { ...extra, onboardingStep: step });
   logger.info({ userId: ctx.user.id, step: step ?? 'complete' }, 'onboarding step');
-}
-
-/** Appends a "chosen" line to the pressed message and removes its keyboard. */
-async function markChosen(ctx: BotContext, line: string) {
-  const text = ctx.callbackQuery?.message?.text;
-  try {
-    if (text) await ctx.editMessageText(`${text}\n\n${line}`);
-    else await ctx.editMessageReplyMarkup();
-  } catch (err) {
-    logger.warn({ err }, 'failed to edit onboarding message');
-  }
 }
 
 async function sendGreeting(ctx: BotContext) {

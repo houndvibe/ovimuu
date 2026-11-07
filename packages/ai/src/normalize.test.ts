@@ -26,6 +26,11 @@ describe('normalizeParseResult', () => {
     expect(m).toMatchObject({ name: 'Магний', doseUnit: null, unitForm: null, notes: null });
   });
 
+  it('capitalizes the first letter of the name only', () => {
+    expect(norm({ name: 'мелатонин' }).name).toBe('Мелатонин');
+    expect(norm({ name: 'магне B6' }).name).toBe('Магне B6');
+  });
+
   it('derives timesPerDay from named slots only when missing', () => {
     expect(
       norm({ slots: [{ time: '09:00', anchor: null, anchorOffsetMin: null }] }).timesPerDay,

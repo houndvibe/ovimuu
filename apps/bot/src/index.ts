@@ -1,9 +1,11 @@
+import { createAi } from '@ovimuu/ai';
 import { createDb } from '@ovimuu/db';
 import { createBot } from './bot.ts';
 import { EnvError, loadEnv } from './env.ts';
+import { startScheduler } from './jobs/scheduler.ts';
 import { logger } from './logger.ts';
 
-function main(): void {
+async function main(): Promise<void> {
   let env;
   try {
     env = loadEnv();
@@ -16,10 +18,20 @@ function main(): void {
   }
 
   const { db, pool } = createDb(env.DATABASE_URL);
-  const bot = createBot(env.BOT_TOKEN, db);
+  const ai = createAi({
+    folderId: env.YC_FOLDER_ID,
+    apiKey: env.YC_API_KEY,
+    models: {
+      ...(env.YC_MODEL_PARSE && { parse: env.YC_MODEL_PARSE }),
+      ...(env.YC_MODEL_INTENT && { intent: env.YC_MODEL_INTENT }),
+    },
+  });
+  const bot = createBot(env.BOT_TOKEN, { db, ai });
+  const boss = await startScheduler(env.DATABASE_URL, db);
 
   const stop = async () => {
     await bot.stop();
+    await boss.stop();
     await pool.end();
   };
   process.once('SIGINT', () => void stop());
@@ -31,4 +43,7 @@ function main(): void {
   });
 }
 
-main();
+main().catch((err) => {
+  logger.fatal({ err }, 'startup failed');
+  process.exit(1);
+});

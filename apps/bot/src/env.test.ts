@@ -5,6 +5,8 @@ const valid = {
   BOT_TOKEN: '123:abc',
   DATABASE_URL: 'postgres://u:p@localhost:5432/db',
   ADMIN_TELEGRAM_ID: '42',
+  YC_FOLDER_ID: 'b1gfolder',
+  YC_API_KEY: 'AQVNkey',
 };
 
 describe('parseEnv', () => {
@@ -12,7 +14,7 @@ describe('parseEnv', () => {
     const env = parseEnv(valid);
     expect(env.ADMIN_TELEGRAM_ID).toBe(42);
     expect(env.NODE_ENV).toBe('development');
-    expect(env.YC_API_KEY).toBeUndefined();
+    expect(env.YC_MODEL_PARSE).toBeUndefined();
   });
 
   it('treats empty strings as missing for optional vars', () => {
@@ -28,6 +30,7 @@ describe('parseEnv', () => {
       expect(msg).toContain('BOT_TOKEN: is required');
       expect(msg).toContain('DATABASE_URL: is required');
       expect(msg).toContain('ADMIN_TELEGRAM_ID: is required');
+      expect(msg).toContain('YC_API_KEY: is required');
     }
   });
 

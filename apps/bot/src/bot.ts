@@ -1,19 +1,17 @@
-import type { Db } from '@ovimuu/db';
 import { Bot } from 'grammy';
-import { type BotContext, privateOnly, userMiddleware } from './context.ts';
+import { addFlow } from './add/handlers.ts';
+import { type BotContext, type Deps, privateOnly, userMiddleware } from './context.ts';
 import { logger } from './logger.ts';
 import { onboarding } from './onboarding/handlers.ts';
-import { texts } from './texts.ts';
 
-export function createBot(token: string, db: Db): Bot<BotContext> {
+export function createBot(token: string, deps: Deps): Bot<BotContext> {
   const bot = new Bot<BotContext>(token);
 
   bot.use(privateOnly);
-  bot.use(userMiddleware(db));
+  bot.use(userMiddleware(deps));
   bot.use(onboarding);
-
-  // Onboarding complete. The add-medication flow arrives in stage 1, step 5.
-  bot.on('message', (ctx) => ctx.reply(texts.addFlowStub));
+  // Onboarding complete: free-form input goes to the add-medication flow.
+  bot.use(addFlow);
   bot.on('callback_query', (ctx) => ctx.answerCallbackQuery());
 
   bot.catch((err) => {

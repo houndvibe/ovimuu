@@ -8,8 +8,10 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@ovimuu/ai": "workspace:^",
     "@ovimuu/db": "workspace:^",
     "grammy": "^1.46.0",
+    "pg-boss": "^12.38.1",
     "pino": "^10.4.0",
     "zod": "^4.6.7"
   },

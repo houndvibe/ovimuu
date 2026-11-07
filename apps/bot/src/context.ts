@@ -1,22 +1,29 @@
+import type { AiService } from '@ovimuu/ai';
 import type { Db } from '@ovimuu/db';
 import type { Context, MiddlewareFn } from 'grammy';
 import { getOrCreateUser, type User } from './repo/users.ts';
 
-export type BotContext = Context & {
+export interface Deps {
   db: Db;
-  /** Set by userMiddleware for every handled update. */
-  user: User;
-};
+  ai: AiService;
+}
+
+export type BotContext = Context &
+  Deps & {
+    /** Set by userMiddleware for every handled update. */
+    user: User;
+  };
 
 /** Only private chats with a known sender are handled; everything else is ignored. */
 export const privateOnly: MiddlewareFn<BotContext> = async (ctx, next) => {
   if (ctx.chat?.type === 'private' && ctx.from && !ctx.from.is_bot) await next();
 };
 
-export function userMiddleware(db: Db): MiddlewareFn<BotContext> {
+export function userMiddleware(deps: Deps): MiddlewareFn<BotContext> {
   return async (ctx, next) => {
-    ctx.db = db;
-    ctx.user = await getOrCreateUser(db, ctx.from!.id, ctx.from!.first_name ?? null);
+    ctx.db = deps.db;
+    ctx.ai = deps.ai;
+    ctx.user = await getOrCreateUser(deps.db, ctx.from!.id, ctx.from!.first_name ?? null);
     await next();
   };
 }

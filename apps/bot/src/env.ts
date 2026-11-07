@@ -17,9 +17,10 @@ const envSchema = z
     ADMIN_TELEGRAM_ID: required
       .pipe(z.string().regex(/^\d+$/, 'must be a numeric Telegram user id'))
       .transform(Number),
-    // Required starting with the AI step; optional until then.
-    YC_FOLDER_ID: optionalString,
-    YC_API_KEY: optionalString,
+    YC_FOLDER_ID: required,
+    YC_API_KEY: required,
+    YC_MODEL_PARSE: optionalString,
+    YC_MODEL_INTENT: optionalString,
     PUBLIC_URL: optionalString.pipe(z.url('must be a valid URL').optional()),
   })
   .superRefine((env, ctx) => {
